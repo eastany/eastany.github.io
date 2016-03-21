@@ -24,7 +24,99 @@
 <h3>
 <a id="designer-templates" class="anchor" href="#designer-templates" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>C</h3>
 
-<p>.</p>
+<p>cgroups是control groups的缩写，是Linux内核提供的一种可以限制、记录、隔离进程组（process groups）所使用的物理资源（如：cpu,memory,IO等等）的机制。上篇博客写的namespace作用是使linux的全局资源局域化，使各个名字空间的系统环境相互隔离，互不影响。而cgroup可以限制资源使用的最大值，限制当前进程组对外的最大影响（但无法隔离其他进程对自己的影响）。namespace与cgroup相互配合将使容器具备环境隔离和资源限制的能力，再加上镜像提供的根目录环境，使用chroot即可以为容器提供一个隔离的根目录环境。 本文将主要从内核源码的角度分析docker常用的cgroup资源限制功能：cpuset memory 和blkio。</p>
+<p>blkio – 这个子系统为块设备设定输入/输出限制，比如物理设备（磁盘，固态硬盘，USB 等等）。 cpu – 这个子系统控制cgroup中所有进程可以使用的时间片。 cpuacct – 这个子系统自动生成 cgroup 中任务所使用的 CPU 报告。 cpuset – 这个子系统为 cgroup 中的任务分配独立 CPU（在多核系统）和内存节点。 devices – 这个子系统可允许或者拒绝 cgroup 中的任务访问设备。 freezer – 这个子系统挂起或者恢复 cgroup 中的任务。 memory – 这个子系统设定 cgroup 中任务使用的内存限制，并自动生成由那些任务使用的内存资源报告。 net_cls – 这个子系统使用等级识别符（classid）标记网络数据包，可允许 Linux 流量控制程序（tc）识别从具体 cgroup 中生成的数据包。 ns – 名称空间子系统。 cgroup系统是一个树状结构，子cgroup的限定条件必须为父cgroup的子集。</p>
+<p>我们先看一下cpuset数据结构：
+1
+2
+3
+4
+5
+6
+7
+8
+struct cpuset {
+        struct cgroup_subsys_state css;
+ ...//忽略一些代码
+        cpumask_var_t cpus_allowed;
+        nodemask_t mems_allowed;
+...//忽略一些代码
+      
+};
+忽略了一些代码，重点关注cpuset的cpus_allowed。这个结构用于限定一个进程组所能使用cpu核。通过task_struct，进程都能找到进程所在进程组的cpu限制和内存节点限制，具体的内核数据结构比较复杂，这里略过。 linux内核是通过将进程加入对应cpu核的任务队列实现进程与cpu核绑定功能的。新建的进程与已存在的进程调度略有不同。我们知道，内核是通过do_fork实现新建进程，在do_fork函数里调用 wake_up_new_task实现新建进程的调度。wake_up_new_task相关代码如下：
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+/*
+ * wake_up_new_task - wake up a newly created task for the first time.
+ *
+  * This function will do some initial scheduler statistics housekeeping
+  * that must be done for every newly created context, then puts the task
+  * on the runqueue and wakes it.
+  */
+ void wake_up_new_task(struct task_struct *p)
+ {
+        unsigned long flags;
+        struct rq *rq;
+        raw_spin_lock_irqsave(&p->pi_lock, flags);
+ #ifdef CONFIG_SMP
+        /*
+         * Fork balancing, do it here and not earlier because:
+         *  - cpus_allowed can change in the fork path
+         *  - any previously selected cpu might disappear through hotplug
+        */
+         set_task_cpu(p, select_task_rq(p, task_cpu(p), SD_BALANCE_FORK, 0));
+ #endif
+ 
+         /* Initialize new task's runnable average */
+         init_task_runnable_average(p);
+         rq = __task_rq_lock(p);
+         activate_task(rq, p, 0);
+         p->on_rq = TASK_ON_RQ_QUEUED;
+         trace_sched_wakeup_new(p, true);
+         check_preempt_curr(rq, p, WF_FORK);
+ #ifdef CONFIG_SMP
+        if (p->sched_class->task_woken)
+            p->sched_class->task_woken(rq, p);
+ #endif
+         task_rq_unlock(rq, p, &flags);
+ }
+从代码中可以看出，内核是通过调用
+1
+set_task_cpu(p, select_task_rq(p, task_cpu(p), SD_BALANCE_FORK, 0));
+实现进程在特定cpu核上运行的。select_task_rq返回的是进程被允许运行的一个合适的cpu id。set_task_cpu会使该进程运行在该cpu核上。
+对于已经存在的进程，实现的原理也大致相同。对于完全公平调度CFS算法，内核是通过调用select_task_rq_fair从允许的cpu核中选择一个合适的cpu id返回，然后加入任务队列，等待调度运行。</p>
 
 <h3>
 <a id="creating-pages-manually" class="anchor" href="#creating-pages-manually" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Ng与Html5</h3>
