@@ -24,7 +24,7 @@
 <h3>
 <a id="designer-templates" class="anchor" href="#designer-templates" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>C</h3>
 
-<p>.</p>
+<p>cgroups是control groups的缩写，是Linux内核提供的一种可以限制、记录、隔离进程组（process groups）所使用的物理资源（如：cpu,memory,IO等等）的机制。上篇博客写的namespace作用是使linux的全局资源局域化，使各个名字空间的系统环境相互隔离，互不影响。而cgroup可以限制资源使用的最大值，限制当前进程组对外的最大影响（但无法隔离其他进程对自己的影响）。namespace与cgroup相互配合将使容器具备环境隔离和资源限制的能力，再加上镜像提供的根目录环境，使用chroot即可以为容器提供一个隔离的根目录环境。 本文将主要从内核源码的角度分析docker常用的cgroup资源限制功能：cpuset memory 和blkio。</p>
 
 <h3>
 <a id="creating-pages-manually" class="anchor" href="#creating-pages-manually" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Ng与Html5</h3>
