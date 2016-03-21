@@ -44,6 +44,7 @@ struct cpuset {
       
 };
 忽略了一些代码，重点关注cpuset的cpus_allowed。这个结构用于限定一个进程组所能使用cpu核。通过task_struct，进程都能找到进程所在进程组的cpu限制和内存节点限制，具体的内核数据结构比较复杂，这里略过。 linux内核是通过将进程加入对应cpu核的任务队列实现进程与cpu核绑定功能的。新建的进程与已存在的进程调度略有不同。我们知道，内核是通过do_fork实现新建进程，在do_fork函数里调用 wake_up_new_task实现新建进程的调度。wake_up_new_task相关代码如下：
+<pre>
 <code>
 /*
  * wake_up_new_task - wake up a newly created task for the first time.
@@ -80,6 +81,7 @@ struct cpuset {
          task_rq_unlock(rq, p, &flags);
  }
 </code> 
+</pre>
 从代码中可以看出，内核是通过调用
 set_task_cpu(p, select_task_rq(p, task_cpu(p), SD_BALANCE_FORK, 0));
 实现进程在特定cpu核上运行的。select_task_rq返回的是进程被允许运行的一个合适的cpu id。set_task_cpu会使该进程运行在该cpu核上。
